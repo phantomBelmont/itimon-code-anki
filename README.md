@@ -1,1 +1,1 @@
-# itimon-code-anki
+# itimon-code-ankiコード勉強中。初心者。Leo AIに教わったクイズアプリのコードに、自分で考えた設問と回答を追記。
