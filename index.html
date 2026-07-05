@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>コードクイズ - 記憶管理版</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: rgb(44, 44, 44);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background:black;
+      padding: 40px;
+      border-radius: 15px;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+      text-align: center;
+      max-width: 320px;
+      width: 100%;
+    }
+    h1 { color: rgb(103, 102, 102); font-size: 20px; margin-bottom: 20px; }
+    .count-box {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: grey;
+      margin-bottom: 20px;
+    }
+    .word-jp { font-size: 32px; font-weight: bold; color: whitesmoke; margin-bottom: 20px; }
+    
+    .answer-box {
+      font-size: 40px;
+      color: #d6dd15;
+      margin-bottom: 30px;
+      min-height: 60px;
+      font-weight: bold;
+      transition: all 0.3s ease;
+    }
+    .hidden { color: #323131; font-size: 20px; }
+
+    .lang-badge {
+      display: inline-block;
+      background: #2c2c2b;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      color: rgb(235, 129, 16);
+      margin-bottom: 20px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      flex-direction: column;
+    }
+
+    button {
+      padding: 15px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      font-weight: bold;
+      transition: transform 0.1s;
+    }
+    button:active { transform: scale(0.98); }
+
+    .btn-answer { background: #4b0404; color: rgb(113, 119, 6); }
+    .btn-answer:hover { background: rgb(48, 47, 47); }
+
+    .btn-master { background: rgb(22, 22, 22); color: purple; }
+    .btn-master:hover { background: #2d1f06; }
+
+    .btn-study { background: rgba(35, 34, 34, 0.953); color: purple; }
+    .btn-study:hover { background: #452c0a; }
+
+    .stats {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="card">
+    <h1>🌌コードを楽しくマスター！</h1>
+    
+    <!-- 統計表示 -->
+    <div class="count-box">
+      <span>📚 勉強中: {{ studyList.length }}</span>
+      <span>🏆 マスター: {{ masteredList.length }}</span>
+    </div>
+
+    <!-- 問題がない場合 -->
+    <div v-if="studyList.length === 0">
+      <h2>🎉 すべてマスターしました！</h2>
+      <p>全ての単語を覚えられましたね！</p>
+      <button @click="resetAll" style="background: #666; color: white;">すべてリセット</button>
+    </div>
+
+    <!-- 問題がある場合 -->
+    <div v-else>
+      <div class="lang-badge">{{ currentCard.lang }}</div>
+      <div class="word-jp">{{ currentCard.jp }}</div>
+
+      <!-- 答え表示 -->
+      <div class="answer-box" v-if="isAnswerShown">
+        {{ currentCard.foreign }}
+      </div>
+      <div class="answer-box hidden" v-else>
+        ?? (答えを見る)
+      </div>
+
+      <!-- ボタン群 -->
+      <div class="btn-group">
+        <!-- 答えを見るボタン -->
+        <button @click="showAnswer" v-if="!isAnswerShown" class="btn-answer">
+          答えを見る
+        </button>
+
+        <!-- 答えが見えている時のボタン -->
+        <div v-if="isAnswerShown" class="btn-group">
+          <button @click="markAsMastered" class="btn-master">
+            ✅ 覚えられた！（マスター）
+          </button>
+          <button @click="nextQuestion(false)" class="btn-study">
+            🔄 まだ覚えられない
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- マスター済みリストの表示（オプション：画面下部に小さく） -->
+    <div class="stats" v-if="masteredList.length > 0">
+      🏆 マスター済み: {{ masteredList.length }} 単語
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref } = Vue;
+
+    createApp({
+      setup() {
+        // 元々の単語リスト（全部）
+        const allCards = [
+          { lang: '', jp: 'CDNでライブラリ読み込む場合（スクリプトタグ）', foreign: '<script src="https://unpkg.com/vue@3/dist/vue.global.js><\/script>"' },
+          { lang: '', jp: 'CDNは何の略？', foreign: 'Content Delivery Network' },
+          { lang: '', jp: 'CDNを一言で表すと？', foreign: 'インターネット上の倉庫。' },
+          { lang: '', jp: 'CDNを使うメリットは？', foreign: 'ファイルをダウンロードしなくても、だれでもそのアプリを使える' },
+          { lang: '', jp: 'vueを動かすとき、CDNから何を引っ張ってくる？', foreign: 'vue.global.jsというファイル' },
+          { lang: '', jp: 'vueをオフラインで動かすには？', foreign: 'vue.global.jsをあらかじめCDNからダウンロードしておく' },
+          { lang: '', jp: 'グローバル変数は英語でなんと言う？', foreign: 'Global Variable' },
+          { lang: '', jp: '何のためにvue.script.jsを読み込む？', foreign: 'JSでVueの便利ツールを使うため' },
+          { lang: '', jp: 'createApp() やref()はどこの子？', foreign: 'Vueの子' },
+          { lang: '', jp: 'VueなしのcreateApp()単品で書くとどうなる？', foreign: 'JSはcreateAppを知らないから取り出せずエラー' },
+          { lang: '', jp: 'const [createApp, ref] = Vue;はなぜエラーになる？', foreign: 'Vueは名前で管理しているから順番指定されると混乱するから' },
+          { lang: '', jp: 'JSの箱の出し方は？（２つ）', foreign: '[] (角括弧) - 配列{} (波括弧) - オブジェクト' },
+          { lang: '', jp: '[] (角括弧)つまり配列の意味は？', foreign: '左から順番に要素が並んでる' },
+          { lang: '', jp: '{} (波括弧) の意味は？', foreign: 'オブジェクト内の要素。順はどうでもいい' },
+          { lang: '', jp: 'Vueからツールを引き出すには？', foreign: '名前（キー）だけ指定する' },
+          { lang: '', jp: 'createAppで何ができる？', foreign: 'アプリの土台（インスタンス）を作れる' },
+          { lang: '', jp: 'ref()の意味は？', foreign: '画面に表示するデータをインスタンス内に作る' },
+          { lang: '', jp: 'const { createApp, ref } = Vue;のほかの書き方は？', foreign: 'Vue.createApp({ ... });、Vue.ref();' },
+          { lang: '', jp: 'const { createApp, ref } = Vue;と書くメリットは？', foreign: '以降、いちいちVueと書かなくていい。' },
+          { lang: '', jp: 'const { createApp, ref } = Vue; を文章にすると？', foreign: 'createAppバケツ・refバケツに、Vueが蓄えてる各バケツ専用液を入れてください' },
+          { lang: '', jp: 'Vue(createApp, ref)はなぜエラーになる？', foreign: 'Vueはただの箱なのに、関数呼ばわりされているから。' },
+          { lang: '', jp: 'createApp・refに名前をつける方法', foreign: 'Vueから取り出してからconst { createApp: 好きな名前, ref: なんか名前 } = Vue;' },
+          { lang: '', jp: 'Vueの一連の流れは？', foreign: 'CDNからVue召喚、必要なツールを回収、それを使ってアプリを立ち上げ、中身を書く' },
+          { lang: 'CSS', jp: 'text-shadowで、0 0 5px #fff　はどう見える？', foreign: '文字が白く光ってるように見える' },
+          { lang: '', jp: 'divタグのidやclassは何属性？', foreign: 'HTML属性' },
+          { lang: '', jp: 'divに細かい要素を入れる入れ子構造の通称は？', foreign: 'ネスト' },
+          { lang: '', jp: 'divタグとは？', foreign: '単なる箱（ブロック要素）。' },
+          { lang: '', jp: 'HTMLのclassは何のために使う？', foreign: '同じクラス名がついたdivすべてにまとめて装飾したりできる。' },
+          { lang: '', jp: 'HTMLにある2種類の箱とは？', foreign: '<div>(ブロック要素)と<span>(インライン要素)' },
+          { lang: '', jp: 'JS(scriptタグ内)で定義を後回しにするとどうなる？', foreign: 'エラーになる。' },
+          { lang: '', jp: '@clickの正式な書き方は?', foreign: 'v-on:click' },
+          { lang: '', jp: 'resetAllとは？', foreign: 'JSの関数（Function/メソッド）' },
+          { lang: '', jp: '<button @click="resetAll" ...>の意味は？', foreign: '「このボタンを押したら、次の処理（`resetAll`を実行してね」' },
+          { lang: '', jp: 'resetAllの HTMLでの書き方は?', foreign: 'onclick="resetAll()" ' },
+          { lang: '', jp: 'resetAllのJS 側での書き方は？', foreign: 'element.addEventListener(click, resetAll)' },
+          { lang: '', jp: 'HTMLはなぜHyperなのか?', foreign: '普通は順繰りに読むところを、HTMLはリンクを張った別ページにジャンプできるから。' },
+          { lang: '', jp: 'CSSで色指定なしのリセットボタンを作れ', foreign: '<button @click="resetAll">リセット</button>' },
+          { lang: '', jp: 'CSSなしのボタンはどんな見た目？', foreign: 'ブラウザのデフォルトの灰色の四角' },
+          { lang: '', jp: 'ボタンの見た目をデフォルトの灰色ボタンではなく、リンクっぽいただの文字にしたい場合どうする?', foreign: 'buttonタグ内でクラス指定し、CSSでbackground:none; border:none;を追加する' },
+          { lang: '', jp: 'CSS 文字にリンクっぽく下線を引くには？', foreign: 'text‐decoration：underline;' },
+          { lang: '', jp: 'v-else-ifを使う場所は？', foreign: 'v-ifとv‐elseの「間」' },
+          { lang: '', jp: '{{}}はなんと呼ぶ？', foreign: 'Vueのバインディング' },
+          { lang: '', jp: '<div class="lang-badge">{{ currentCard.lang }}</div>を文章にすると？', foreign: '「lang-badge というクラスを持つdiv の中に、currentCard という箱に入ったlang（プロパティ）を表示してね」' },
+          { lang: '', jp: 'reactiveとrefはどう使い分ける？', foreign: 'reactiveは箱（オブジェクト）全体を監視したい時。' },
+          { lang: '', jp: 'reactiveはHTML、JSどちら側で使う？', foreign: 'JS側(HTML側は{{}}だけ)' },
+          { lang: '', jp: 'const{ref}=Vue;などの道具取り出しや、Vueのreturnを省略する方法は?', foreign: '<script setup>と最初に書く' },
+          { lang: '', jp: ' <script setup>でも省略できないものは？', foreign: 'JS関数内でのreturn' },
+          { lang: '', jp: 'shift() はどんな関数？', foreign: '配列の先頭を削除して、返す関数。' },
+          { lang: '', jp: 'returnはどんな時に使う？', foreign: '関数が計算結果やデータを返す時・「もしこの条件なら、それ以降の処理はやりたくない！」という時に使います。' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' },
+          { lang: '', jp: '', foreign: '' }
+        ];
+
+        // 状態
+        const studyList = ref([...allCards]); // 勉強中リスト（コピーを作成）
+        const masteredList = ref([]); // マスター済みリスト
+        const currentCard = ref(null);
+        const isAnswerShown = ref(false);
+
+        // 最初の単語を表示
+        function loadNextCard() {
+          if (studyList.value.length === 0) {
+            currentCard.value = null;
+            return;
+          }
+          // ランダムに1つ選ぶ
+          const randomIndex = Math.floor(Math.random() * studyList.value.length);
+          currentCard.value = studyList.value[randomIndex];
+          isAnswerShown.value = false;
+        }
+
+        function showAnswer() {
+          isAnswerShown.value = true;
+        }
+
+        // マスター済みに移動
+        function markAsMastered() {
+          if (!currentCard.value) return;
+          
+          // 勉強中リストから削除
+          const index = studyList.value.findIndex(c => 
+            c.lang === currentCard.value.lang && c.jp === currentCard.value.jp
+          );
+          if (index !== -1) {
+            studyList.value.splice(index, 1);
+            // マスター済みリストに追加
+            masteredList.value.push(currentCard.value);
+          }
+          
+          // 次の問題へ
+          loadNextCard();
+        }
+
+        // 次の問題（マスターしない場合）
+        function nextQuestion(resetAnswer = true) {
+          if (resetAnswer) isAnswerShown.value = false;
+          loadNextCard();
+        }
+
+        // すべてリセット
+        function resetAll() {
+          studyList.value = [...allCards];
+          masteredList.value = [];
+          loadNextCard();
+        }
+
+        // 初期化
+        loadNextCard();
+
+        return { 
+          studyList, 
+          masteredList, 
+          currentCard, 
+          isAnswerShown, 
+          showAnswer, 
+          markAsMastered, 
+          nextQuestion,
+          resetAll
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
